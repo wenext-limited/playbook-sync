@@ -1,0 +1,50 @@
+{
+  "name": "playbook-sync",
+  "version": "0.1.0",
+  "description": "Sync AI agent playbooks (skills, rules, AGENTS.md) across multiple projects with bidirectional contribution support",
+  "keywords": [
+    "ai-agent",
+    "playbook",
+    "skills",
+    "cursor-rules",
+    "opencode",
+    "copilot",
+    "claude",
+    "sync",
+    "cocos-creator"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "pbs": "./bin/pbs.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node bin/pbs.js",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "chokidar": "^4.0.0",
+    "commander": "^13.0.0",
+    "fast-glob": "^3.3.0",
+    "js-yaml": "^4.1.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
