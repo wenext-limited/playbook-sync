@@ -2,11 +2,13 @@
 
 将本文档完整提供给 AI，AI 即可帮你完成所有 playbook-sync 相关操作。
 
+> **提示：** `README.zh.md` 已包含本文档的完整内容，可以直接将 README.zh.md 提供给 AI 使用。
+
 ---
 
 ## 给 AI 的背景说明
 
-你是一个熟悉 `playbook-sync`（CLI 工具，命令名 `pbs`）的助手。该工具用于把共享 AI 知识库（playbook）的 skills、rules、AGENTS.md 同步到游戏项目的各 AI 工具目录，并支持将项目内的改动贡献回知识库。
+你是一个熟悉 `playbook-sync`（CLI 工具，命令名 `pbs`）的助手。该工具用于把任意 AI 知识库（通过 git 链接指定）的 skills、rules、AGENTS.md 同步到项目的各 AI 工具目录，并支持将项目内的改动贡献回知识库。
 
 ### 关键文件与目录
 
@@ -23,16 +25,16 @@
 ### 知识库（来源）的目录结构
 
 ```
-playbook-cocos/
+your-playbook/
 ├── skills/
-│   ├── cocos-audio/
+│   ├── skill-name-a/
 │   │   └── SKILL.md        ← 每个 skill 必须有 SKILL.md
-│   ├── oops-framework/
+│   ├── skill-name-b/
 │   │   └── SKILL.md
 │   └── ...
 ├── rules/
 │   ├── common/coding-style.md
-│   └── cocos/project-structure.md
+│   └── ...
 ├── docs/
 │   └── architecture.md
 └── AGENTS.md
@@ -42,9 +44,9 @@ SKILL.md 的标准格式：
 
 ```markdown
 ---
-name: cocos-audio
+name: skill-name-a
 description: 一句话描述何时使用该 skill
-tags: [cocos, audio]
+tags: [标签1, 标签2]
 inputs: [输入参数]
 outputs: [输出结果]
 ---
@@ -130,13 +132,13 @@ pbs init
 
 ```bash
 # 方式 A：从 GitHub 仓库（生产推荐）
-pbs add https://github.com/wenext-limited/playbook-cocos.git
+pbs add https://github.com/your-org/your-playbook.git
 
 # 方式 B：本地路径（本地开发）
-pbs add --local ../playbook-cocos
+pbs add --local ../your-playbook
 
 # 方式 C：git submodule（如果项目已有 submodule）
-pbs add --submodule vendor/playbook-cocos
+pbs add --submodule vendor/your-playbook
 ```
 
 **4. 确认配置正确**
@@ -166,23 +168,23 @@ pbs status
 
 用户说：「我要新增一个 skill」「我要修改某个 skill 的内容」「我要更新知识库」
 
-> 注意：这里的操作对象是**知识库源目录**（如 `playbook-cocos`），不是项目目录。
+> 注意：这里的操作对象是**知识库源目录**（你的 playbook 仓库），不是项目目录。
 
 ### 新增 Skill
 
 **1. 在知识库来源目录创建 skill 文件夹和 SKILL.md**
 
 ```bash
-mkdir skills/cocos-新技能名
+mkdir skills/your-new-skill
 ```
 
 SKILL.md 必须包含 frontmatter：
 
 ```markdown
 ---
-name: cocos-新技能名
+name: your-new-skill
 description: 一句话说明何时使用
-tags: [cocos, 相关标签]
+tags: [标签1, 标签2]
 inputs: [输入参数描述]
 outputs: [输出结果描述]
 ---
@@ -226,7 +228,7 @@ pbs status
 **情况 A：状态显示 `All files in sync`，来源有新 commit**
 
 ```
-ℹ Source has new commits: f8dc7885 → a1b2c3d4
+ℹ Source has new commits: a1b2c3d4 → e5f6g7h8
   Run "pbs sync" to update.
 ```
 
@@ -239,7 +241,7 @@ pbs sync
 **情况 B：状态显示本地有改动（modified）**
 
 ```
-  modified  .opencode/skills/cocos-audio/SKILL.md
+  modified  .opencode/skills/your-skill/SKILL.md
   Local changes detected. Use "pbs contribute" to push them back.
 ```
 
@@ -280,8 +282,8 @@ pbs contribute --dry-run
 
 ```
 ℹ Found 2 modified file(s) to contribute:
-  .opencode/skills/cocos-audio/SKILL.md → skills/cocos-audio/SKILL.md
-  .opencode/skills/oops-framework/SKILL.md → skills/oops-framework/SKILL.md
+  .opencode/skills/skill-a/SKILL.md → skills/skill-a/SKILL.md
+  .opencode/skills/skill-b/SKILL.md → skills/skill-b/SKILL.md
 ℹ Dry run — no changes applied.
 ```
 
@@ -300,9 +302,9 @@ pbs contribute
 输出会提示：
 
 ```
-✓   Copied: skills/cocos-audio/SKILL.md
+✓   Copied: skills/skill-a/SKILL.md
 ℹ Changes copied to source. To commit:
-  cd /path/to/playbook-cocos
+  cd /path/to/your-playbook
   git add . && git commit -m "your message"
   git push
 ```
@@ -312,8 +314,8 @@ pbs contribute
 ```bash
 pbs contribute \
   --push \
-  --branch "fix/audio-skill-update" \
-  --message "fix: 修正音频淡出示例代码"
+  --branch "fix/skill-update" \
+  --message "fix: 修正示例代码"
 ```
 
 成功后会显示：
@@ -372,13 +374,10 @@ resolved_ref: a1b2c3d4...
 **解决：** 锁文件不需要手动解决冲突，直接删除后重新生成：
 
 ```bash
-# 删除冲突的锁文件
 rm playbook-sync.lock.yaml
 
-# 重新同步，生成新的锁文件
 pbs sync
 
-# 提交新锁文件
 git add playbook-sync.lock.yaml
 git commit -m "chore: regenerate lockfile after merge"
 ```
@@ -394,11 +393,10 @@ git commit -m "chore: regenerate lockfile after merge"
 **诊断：**
 
 ```bash
-# 查看哪些文件被标记为 modified
 pbs status
 
-# 对比具体文件内容差异
-git diff .opencode/skills/cocos-audio/SKILL.md
+# 对比具体文件内容
+git diff .opencode/skills/your-skill/SKILL.md
 ```
 
 **解决方案 A：直接重新同步（丢弃本地改动）**
@@ -422,7 +420,7 @@ pbs sync                   # 重新同步，校验和恢复正常
 **现象：**
 
 ```
-⚠  Source has new commits: f8dc7885 → a1b2c3d4
+⚠  Source has new commits: a1b2c3d4 → e5f6g7h8
    Run "pbs sync" to update.
 ```
 
@@ -473,15 +471,15 @@ Error: Local source path not found: /path/to/playbook-cocos
 
 **解决：**
 
-```bash
+```
 # 检查 playbook-sync.yaml 中 path 是否正确
 cat playbook-sync.yaml
 
 # 确认目录存在
-ls ../playbook-cocos
+ls ../your-playbook
 
-# 如果路径错误，修改配置后重新 add
-pbs add --local <正确的路径> --name playbook-cocos
+# 如果路径错误，重新 add
+pbs add --local <正确的路径> --name <来源名>
 pbs sync
 ```
 
@@ -503,10 +501,10 @@ Error: Cloning failed...
 
 ```bash
 # 手动 clone 知识库到本地
-git clone https://github.com/wenext-limited/playbook-cocos.git ../playbook-cocos
+git clone <仓库URL> ../your-playbook
 
 # 改用本地来源
-pbs add --local ../playbook-cocos --name playbook-cocos
+pbs add --local ../your-playbook --name my-playbook
 pbs sync
 ```
 
@@ -548,4 +546,4 @@ pbs sync
 2. **Cursor 的 `.mdc` 文件不支持贡献回流**。编辑 skill 内容请通过 `.opencode/skills/` 目录。
 3. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
 4. **`.playbook-sync/` 目录不需要提交**（已在 `.gitignore`），是 git 来源的本地缓存。
-5. **`pbs watch` 仅支持本地/submodule 来源**，git URL 来源需手动 `pbs sync`。
+5. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
