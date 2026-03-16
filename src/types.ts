@@ -126,12 +126,12 @@ export const LOCKFILE_FILENAME = 'playbook-sync.lock.yaml';
 export const CACHE_DIR = '.playbook-sync';
 export const DEFAULT_TARGETS: Record<string, TargetConfig> = {
   opencode: {
-    enabled: true,
+    enabled: false,
     skills_path: '.opencode/skills',
     agents_md: 'AGENTS.md',
   },
   cursor: {
-    enabled: true,
+    enabled: false,
     skills_path: '.cursor/rules',
     mdc_globs: ['**/*.ts', '**/*.js'],
   },

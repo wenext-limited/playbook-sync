@@ -23,7 +23,9 @@ export async function initCommand(): Promise<void> {
 
   logger.success(`Created ${CONFIG_FILENAME}`);
   logger.info('Next steps:');
-  logger.dim('  pbs add <git-url>        # Add a playbook source');
-  logger.dim('  pbs add --local <path>   # Add a local source');
-  logger.dim('  pbs sync                 # Sync playbook to AI tools');
+  logger.dim('  1. Edit playbook-sync.yaml to enable the targets you need:');
+  logger.dim('     opencode, cursor, copilot, claude (all disabled by default)');
+  logger.dim('  2. pbs add <git-url>        # Add a playbook source');
+  logger.dim('     pbs add --local <path>   # Or add a local source');
+  logger.dim('  3. pbs sync                 # Sync playbook to AI tools');
 }

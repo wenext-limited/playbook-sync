@@ -3,7 +3,7 @@ import { type PlaybookSyncConfig, type ResolvedSource, type Lockfile } from '../
 import { resolveSource } from './source.js';
 import { loadLockfile, saveLockfile, updateLockfile, createLockedSource } from './lockfile.js';
 import { getFormatter } from '../targets/index.js';
-import { listFilesSync } from '../utils/fs.js';
+import { listFilesSync, collectIgnorePaths, updateGitignore } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
 
 export interface SyncResult {
@@ -26,6 +26,15 @@ export async function syncAll(
 
   if (config.sources.length === 0) {
     logger.warn('No sources configured. Run "pbs add <source>" first.');
+    return results;
+  }
+
+  // Check if any target is enabled
+  const enabledTargets = Object.entries(config.targets).filter(([, t]) => t.enabled);
+  if (enabledTargets.length === 0) {
+    logger.warn(
+      'No targets enabled. Edit playbook-sync.yaml and set "enabled: true" for the targets you need (opencode, cursor, copilot, claude).'
+    );
     return results;
   }
 
@@ -76,6 +85,12 @@ export async function syncAll(
   // Save lockfile
   saveLockfile(projectRoot, lockfile!);
   logger.success(`Lockfile updated.`);
+
+  // Update .gitignore with output paths from enabled targets
+  const ignorePaths = collectIgnorePaths(config.targets);
+  if (updateGitignore(projectRoot, ignorePaths)) {
+    logger.success(`Updated .gitignore with playbook-sync output paths.`);
+  }
 
   return results;
 }

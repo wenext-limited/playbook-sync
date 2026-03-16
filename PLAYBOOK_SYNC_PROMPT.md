@@ -22,6 +22,28 @@
 | `.github/copilot-instructions.md` | Copilot 输出（合并为单文件） |
 | `.claude/skills/` | Claude Code 输出目录 |
 
+### .gitignore 自动维护
+
+`pbs sync` 执行时会**自动检测**项目中的 `.gitignore` 文件，并在其中维护一个标记块：
+
+```gitignore
+# >>> playbook-sync managed (DO NOT EDIT) >>>
+.playbook-sync/
+.claude/skills/
+AGENTS.md
+# <<< playbook-sync managed <<<
+```
+
+**行为说明：**
+- 仅当项目根目录已存在 `.gitignore` 时才会写入，不会凭空创建该文件。
+- 标记块内的条目根据 `playbook-sync.yaml` 中**已启用（`enabled: true`）的 targets** 动态生成。
+- `.playbook-sync/`（缓存目录）始终会被忽略。
+- 用户修改 targets 的启用状态后，下次 `pbs sync` 会自动更新标记块。
+- 标记块外的其他 `.gitignore` 内容不会受到影响。
+- **请勿手动编辑标记块内的内容**，它会在每次 sync 时被覆盖。
+
+这确保了 pbs 同步的输出文件不会被意外提交到项目仓库——这些文件应通过 `pbs sync` 从知识库获取，而非通过 git 直接管理。
+
 ### 知识库（来源）的目录结构
 
 ```
@@ -144,7 +166,13 @@ pbs add --submodule vendor/your-playbook
 **4. 确认配置正确**
 
 打开 `playbook-sync.yaml`，确认 sources 和 targets 符合项目需要。
-按需启用/禁用 targets（enabled: true/false）。
+**所有 targets 默认均为 `enabled: false`，必须手动启用需要的 target**（设置 `enabled: true`），否则 `pbs sync` 不会生成任何输出。
+
+支持的 targets：
+- `opencode` — 同步到 `.opencode/skills/` + `AGENTS.md`
+- `cursor` — 同步到 `.cursor/rules/`（.mdc 格式）
+- `copilot` — 合并到 `.github/copilot-instructions.md`
+- `claude` — 同步到 `.claude/skills/` + `AGENTS.md`
 
 **5. 执行首次同步**
 
@@ -153,6 +181,7 @@ pbs sync
 ```
 
 首次使用 git URL 来源时会自动 clone，稍等即可。
+同步完成后，pbs 会自动将输出目录追加到项目的 `.gitignore`（如果存在），防止同步产物被意外提交。
 
 **6. 验证输出**
 
@@ -161,6 +190,22 @@ pbs status
 ```
 
 看到 `✓ All files in sync.` 说明环境搭建完成。
+
+检查 `.gitignore` 确认 pbs 管理的忽略条目已正确写入：
+
+```bash
+cat .gitignore
+```
+
+应该能看到类似以下标记块（内容取决于你启用的 targets）：
+
+```gitignore
+# >>> playbook-sync managed (DO NOT EDIT) >>>
+.playbook-sync/
+.claude/skills/
+AGENTS.md
+# <<< playbook-sync managed <<<
+```
 
 ---
 
@@ -202,7 +247,7 @@ outputs: [输出结果描述]
 pbs sync
 ```
 
-新 skill 会出现在 `.opencode/skills/` 和 `.cursor/rules/` 中。
+新 skill 会出现在已启用 targets 对应的输出目录中（如 `.claude/skills/`、`.opencode/skills/` 等）。
 
 ### 修改已有 Skill（在知识库侧直接修改）
 
@@ -547,3 +592,4 @@ pbs sync
 3. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
 4. **`.playbook-sync/` 目录不需要提交**（已在 `.gitignore`），是 git 来源的本地缓存。
 5. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
+6. **`pbs sync` 会自动维护 `.gitignore`**。已启用 targets 的输出路径会被自动添加到 `.gitignore` 的标记块中，确保同步产物不被误提交。修改 targets 启用状态后，下次 sync 会自动更新。

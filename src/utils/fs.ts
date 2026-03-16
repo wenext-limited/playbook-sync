@@ -71,6 +71,104 @@ export function removeDirSync(dir: string): void {
   }
 }
 
+// ─── .gitignore management ───
+
+const GITIGNORE_MARKER_START = '# >>> playbook-sync managed (DO NOT EDIT) >>>';
+const GITIGNORE_MARKER_END = '# <<< playbook-sync managed <<<';
+
+/**
+ * Collect all output paths that should be git-ignored based on enabled targets.
+ */
+export function collectIgnorePaths(
+  targets: Record<string, { enabled: boolean; skills_path?: string; agents_md?: string; mode?: string }>
+): string[] {
+  const paths: string[] = [];
+
+  // Always ignore the pbs cache directory
+  paths.push('.playbook-sync/');
+
+  for (const [_name, config] of Object.entries(targets)) {
+    if (!config.enabled) continue;
+
+    if (config.skills_path) {
+      // Normalize: ensure trailing slash for directories, no trailing slash for files
+      const p = config.skills_path.replace(/\\/g, '/');
+      if (p.endsWith('.md')) {
+        // Single file target (e.g. copilot-instructions.md)
+        paths.push(p);
+      } else {
+        // Directory target — use trailing slash
+        paths.push(p.endsWith('/') ? p : p + '/');
+      }
+    }
+
+    // AGENTS.md at project root
+    if (config.agents_md) {
+      const agentsMd = config.agents_md.replace(/\\/g, '/');
+      if (!paths.includes(agentsMd)) {
+        paths.push(agentsMd);
+      }
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Update the project's .gitignore to include playbook-sync managed entries.
+ * Uses marker comments to manage a dedicated block — existing user content is preserved.
+ *
+ * @returns true if the file was updated, false if already up-to-date or no .gitignore exists.
+ */
+export function updateGitignore(projectRoot: string, ignorePaths: string[]): boolean {
+  const gitignorePath = path.join(projectRoot, '.gitignore');
+
+  // Only update if .gitignore already exists (don't create one in non-git projects)
+  if (!fs.existsSync(gitignorePath)) {
+    return false;
+  }
+
+  const content = fs.readFileSync(gitignorePath, 'utf-8');
+
+  // Build the managed block
+  const managedBlock = [
+    GITIGNORE_MARKER_START,
+    ...ignorePaths,
+    GITIGNORE_MARKER_END,
+  ].join('\n');
+
+  // Check if there is already a managed block
+  const blockRegex = new RegExp(
+    escapeRegExp(GITIGNORE_MARKER_START) +
+    '[\\s\\S]*?' +
+    escapeRegExp(GITIGNORE_MARKER_END),
+    'm'
+  );
+  const existingMatch = content.match(blockRegex);
+
+  let newContent: string;
+
+  if (existingMatch) {
+    // Replace existing block
+    if (existingMatch[0] === managedBlock) {
+      // Already up-to-date
+      return false;
+    }
+    newContent = content.replace(blockRegex, managedBlock);
+  } else {
+    // Append block at the end
+    const trimmed = content.trimEnd();
+    newContent = trimmed + '\n\n' + managedBlock + '\n';
+  }
+
+  fs.writeFileSync(gitignorePath, newContent, 'utf-8');
+  return true;
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Find the project root (where playbook-sync.yaml is, or cwd).
  */
