@@ -83,7 +83,7 @@ program
   .option('-s, --source <name>', 'Source name to contribute to')
   .option('-b, --branch <name>', 'Branch name for contribution')
   .option('-m, --message <msg>', 'Commit message')
-  .option('-p, --push', 'Auto-push to remote')
+  .option('--no-push', 'Skip auto-push (git sources push by default)')
   .option('-d, --dry-run', 'Show what would be contributed without applying')
   .action(async (options: ContributeOptions) => {
     try {

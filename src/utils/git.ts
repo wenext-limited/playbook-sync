@@ -66,7 +66,62 @@ export async function isSubmodule(projectRoot: string, subPath: string): Promise
 }
 
 /**
+ * Fetch from origin and rebase the current branch onto the remote tracking branch.
+ * If there are rebase conflicts, the rebase is aborted and an error is thrown
+ * with instructions for the user to resolve manually.
+ */
+export async function fetchAndRebase(
+  repoPath: string,
+  branch: string
+): Promise<void> {
+  const git = simpleGit(repoPath);
+
+  logger.step(`Fetching latest from origin...`);
+  await git.fetch('origin');
+
+  // Check if the remote branch exists
+  const remoteRefs = await git.branch(['-r']);
+  const remoteBranch = `origin/${branch}`;
+  if (!remoteRefs.all.includes(remoteBranch)) {
+    // Remote branch doesn't exist yet — nothing to rebase onto
+    logger.dim(`  Remote branch ${remoteBranch} does not exist yet; skipping rebase.`);
+    return;
+  }
+
+  logger.step(`Rebasing ${branch} onto ${remoteBranch}...`);
+  try {
+    await git.rebase([remoteBranch]);
+  } catch (err) {
+    // Rebase failed — likely a conflict. Abort and inform the user.
+    logger.warn('Rebase failed due to conflicts. Aborting rebase...');
+    try {
+      await git.rebase(['--abort']);
+    } catch {
+      // Abort may fail if rebase wasn't in progress — ignore
+    }
+
+    const msg = [
+      'Could not automatically rebase your changes onto the latest remote.',
+      'The remote branch has diverged from your local changes.',
+      '',
+      'To resolve manually:',
+      `  cd ${repoPath}`,
+      `  git fetch origin`,
+      `  git rebase origin/${branch}`,
+      '  # Fix conflicts, then: git rebase --continue',
+      `  git push origin ${branch}`,
+    ].join('\n');
+
+    throw new Error(msg);
+  }
+
+  logger.success('Rebase successful — local branch is up to date.');
+}
+
+/**
  * Create a branch, commit changes, and push to remote.
+ * When push is true, automatically fetches and rebases before pushing
+ * to handle upstream changes gracefully.
  */
 export async function commitAndPush(
   repoPath: string,
@@ -84,7 +139,19 @@ export async function commitAndPush(
   }
 
   await git.add(files);
+
+  // Check if there's anything to commit (files may already be staged)
+  const status = await git.status();
+  if (status.staged.length === 0 && status.files.length === 0) {
+    logger.info('No changes to commit.');
+    return;
+  }
+
   await git.commit(message);
+
+  // Fetch + rebase before push to avoid non-fast-forward rejections
+  await fetchAndRebase(repoPath, branch);
+
   logger.step(`Pushing to origin/${branch}...`);
   await git.push('origin', branch, ['--set-upstream']);
 }

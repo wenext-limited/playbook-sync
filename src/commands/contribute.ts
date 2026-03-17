@@ -14,7 +14,12 @@ export interface ContributeOptions {
   branch?: string;
   /** Commit message */
   message?: string;
-  /** Auto-push to remote */
+  /**
+   * Whether to push to remote after committing.
+   * - For git sources: defaults to true (auto-push)
+   * - For local/submodule sources: defaults to false
+   * - Explicitly set to false via --no-push to skip pushing
+   */
   push?: boolean;
   /** Dry run — show what would be contributed */
   dryRun?: boolean;
@@ -128,25 +133,17 @@ export async function contributeCommand(options: ContributeOptions): Promise<voi
     return;
   }
 
-  // Pre-check: warn if source has newer commits than what we synced from
-  try {
-    const resolved = await resolveSource(projectRoot, sourceConfig);
-    if (resolved.resolved_ref !== locked.resolved_ref) {
-      logger.warn(
-        `Source has been updated since last sync: ${locked.resolved_ref.slice(0, 8)} → ${resolved.resolved_ref.slice(0, 8)}`
-      );
-      logger.warn(
-        'Your changes may conflict with newer source content.'
-      );
-      logger.info(
-        'Consider running "pbs sync --force" first, then re-apply your changes.'
-      );
-      logger.info(
-        'Proceeding with contribute anyway...\n'
-      );
+  // Pre-contribute: ensure source cache is up-to-date with remote.
+  // For git sources, this fetches the latest so our subsequent rebase works
+  // against the true remote HEAD.
+  if (sourceConfig.type === 'git') {
+    try {
+      logger.step('Ensuring source is up-to-date before contributing...');
+      await resolveSource(projectRoot, sourceConfig);
+    } catch (err) {
+      logger.warn(`Could not update source from remote: ${String(err)}`);
+      logger.info('Proceeding with contribute using cached state...\n');
     }
-  } catch {
-    // Could not check — proceed anyway
   }
 
   // Copy changes back to source
@@ -169,15 +166,25 @@ export async function contributeCommand(options: ContributeOptions): Promise<voi
     logger.success(`  Copied: ${sourcePath}`);
   }
 
-  // Optionally commit and push
-  if (options.push) {
-    const branch = options.branch ?? `contribute/${Date.now()}`;
+  // Determine whether to push. For git sources, default is true.
+  const isGitSource = sourceConfig.type === 'git';
+  const shouldPush = options.push !== undefined ? options.push : isGitSource;
+
+  if (shouldPush) {
+    const branch = options.branch ?? (isGitSource ? (sourceConfig as { ref?: string }).ref ?? 'main' : `contribute/${Date.now()}`);
     const message = options.message ?? `chore: contribute changes from project`;
 
     logger.info('Committing and pushing...');
-    await commitAndPush(sourceLocalPath, branch, message, copiedFiles);
-    logger.success(`Pushed to branch: ${branch}`);
-    logger.info('Create a Pull Request to merge your changes.');
+    try {
+      await commitAndPush(sourceLocalPath, branch, message, copiedFiles);
+      logger.success(`Pushed to origin/${branch}`);
+    } catch (err) {
+      // commitAndPush now includes fetch+rebase, so conflicts surface here
+      logger.error(String(err));
+      logger.info('\nYour changes have been copied to the source repo but could not be pushed.');
+      logger.info('Please resolve the issue above, then push manually.');
+      return;
+    }
   } else {
     logger.info('Changes copied to source. To commit:');
     logger.dim(`  cd ${sourceLocalPath}`);
