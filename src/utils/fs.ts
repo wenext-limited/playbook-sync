@@ -78,6 +78,9 @@ const GITIGNORE_MARKER_END = '# <<< playbook-sync managed <<<';
 
 /**
  * Collect all output paths that should be git-ignored based on enabled targets.
+ *
+ * For directory-based targets (opencode, claude, cursor), uses the base directory
+ * (parent of skills_path) to cover all synced content (skills, rules, agents, docs, etc.).
  */
 export function collectIgnorePaths(
   targets: Record<string, { enabled: boolean; skills_path?: string; agents_md?: string; mode?: string }>
@@ -99,8 +102,13 @@ export function collectIgnorePaths(
         // Single file target (e.g. copilot-instructions.md)
         paths.push(p);
       } else {
-        // Directory target — use trailing slash
-        paths.push(p.endsWith('/') ? p : p + '/');
+        // Directory target — use base directory to cover all synced content
+        // e.g. '.opencode/skills' → '.opencode/' covers skills/, rules/, agents/, docs/, etc.
+        const basePath = path.dirname(p).replace(/\\/g, '/');
+        const baseEntry = basePath.endsWith('/') ? basePath : basePath + '/';
+        if (!paths.includes(baseEntry)) {
+          paths.push(baseEntry);
+        }
       }
     }
 

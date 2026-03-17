@@ -210,6 +210,8 @@ function mapSourceToTarget(
   targetName: string,
   targetSkillsPath: string
 ): string | null {
+  const basePath = path.dirname(targetSkillsPath); // e.g. '.opencode'
+
   if (sourcePath.startsWith('skills/')) {
     // Cursor uses .mdc format: skills/cocos-xxx/SKILL.md → .cursor/rules/cocos-xxx.mdc
     if (targetName === 'cursor') {
@@ -225,9 +227,44 @@ function mapSourceToTarget(
     const rest = sourcePath.slice('skills/'.length);
     return path.join(targetSkillsPath, rest).replace(/\\/g, '/');
   }
+
   if (sourcePath === 'AGENTS.md') {
     return 'AGENTS.md';
   }
+
+  // CLAUDE.md → basePath/CLAUDE.md
+  if (sourcePath === 'CLAUDE.md') {
+    return path.join(basePath, 'CLAUDE.md').replace(/\\/g, '/');
+  }
+
+  // README.md → basePath/README.md
+  if (sourcePath === 'README.md') {
+    return path.join(basePath, 'README.md').replace(/\\/g, '/');
+  }
+
+  // rules/, agents/, docs/, new_project_code/ → basePath/<path>
+  if (
+    sourcePath.startsWith('rules/') ||
+    sourcePath.startsWith('agents/') ||
+    sourcePath.startsWith('docs/') ||
+    sourcePath.startsWith('new_project_code/')
+  ) {
+    // Cursor: convert rules and agents to .mdc
+    if (targetName === 'cursor') {
+      if (sourcePath.startsWith('rules/') && sourcePath.endsWith('.md')) {
+        const ruleName = path.basename(sourcePath, '.md');
+        return path.join(targetSkillsPath, `rule-${ruleName}.mdc`).replace(/\\/g, '/');
+      }
+      if (sourcePath.startsWith('agents/') && sourcePath.endsWith('.md')) {
+        const agentName = path.basename(sourcePath, '.md');
+        return path.join(targetSkillsPath, `agent-${agentName}.mdc`).replace(/\\/g, '/');
+      }
+      return null;
+    }
+
+    return path.join(basePath, sourcePath).replace(/\\/g, '/');
+  }
+
   return null;
 }
 

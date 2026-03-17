@@ -209,37 +209,78 @@ function buildFileMappings(
     const skillsPath = targetConfig.skills_path;
     if (!skillsPath) continue;
 
+    // Cursor uses .mdc format — skip file-level mapping (format is different)
+    // Copilot merges all into a single file — skip individual file mapping
+    const isTransformed = targetName === 'cursor' || targetConfig.mode === 'merge';
+    if (isTransformed) continue;
+
+    const basePath = path.dirname(skillsPath); // e.g. '.opencode'
+
+    // Helper to add a mapping
+    const addMapping = (sourceRelPath: string, targetRelPath: string, sourceAbsPath: string) => {
+      mappings.push({
+        targetRelPath,
+        targetAbsPath: path.resolve(projectRoot, targetRelPath),
+        sourceRelPath,
+        sourceAbsPath,
+        targetName,
+      });
+    };
+
     // Skills
     for (const skill of resolved.content.skills) {
       for (const sourceFile of skill.files) {
         const basename = path.basename(sourceFile);
-
-        // Cursor uses .mdc format — skip file-level mapping (format is different)
-        if (targetName === 'cursor') continue;
-        // Copilot merges all skills into a single file — skip individual file mapping
-        if (targetConfig.mode === 'merge') continue;
-
         const targetRelPath = path.join(skillsPath, skill.name, basename).replace(/\\/g, '/');
-        mappings.push({
-          targetRelPath,
-          targetAbsPath: path.resolve(projectRoot, targetRelPath),
-          sourceRelPath: sourceFile,
-          sourceAbsPath: path.join(resolved.local_path, sourceFile),
-          targetName,
-        });
+        addMapping(sourceFile, targetRelPath, path.join(resolved.local_path, sourceFile));
       }
+    }
+
+    // skills/README.md
+    if (resolved.content.skills_readme) {
+      const targetRelPath = path.join(skillsPath, 'README.md').replace(/\\/g, '/');
+      addMapping('skills/README.md', targetRelPath, resolved.content.skills_readme);
     }
 
     // AGENTS.md
     if (resolved.content.agents_md && targetConfig.agents_md) {
-      const agentsMd = targetConfig.agents_md;
-      mappings.push({
-        targetRelPath: agentsMd,
-        targetAbsPath: path.resolve(projectRoot, agentsMd),
-        sourceRelPath: 'AGENTS.md',
-        sourceAbsPath: resolved.content.agents_md,
-        targetName,
-      });
+      addMapping('AGENTS.md', targetConfig.agents_md, resolved.content.agents_md);
+    }
+
+    // CLAUDE.md
+    if (resolved.content.claude_md) {
+      const targetRelPath = path.join(basePath, 'CLAUDE.md').replace(/\\/g, '/');
+      addMapping('CLAUDE.md', targetRelPath, resolved.content.claude_md);
+    }
+
+    // README.md
+    if (resolved.content.readme) {
+      const targetRelPath = path.join(basePath, 'README.md').replace(/\\/g, '/');
+      addMapping('README.md', targetRelPath, resolved.content.readme);
+    }
+
+    // Rules
+    for (const rulePath of resolved.content.rules) {
+      const targetRelPath = path.join(basePath, rulePath).replace(/\\/g, '/');
+      addMapping(rulePath, targetRelPath, path.join(resolved.local_path, rulePath));
+    }
+
+    // Agents directory
+    for (const agentPath of resolved.content.agents_dir) {
+      const targetRelPath = path.join(basePath, agentPath).replace(/\\/g, '/');
+      addMapping(agentPath, targetRelPath, path.join(resolved.local_path, agentPath));
+    }
+
+    // Docs
+    for (const docPath of resolved.content.other_docs) {
+      const targetRelPath = path.join(basePath, docPath).replace(/\\/g, '/');
+      addMapping(docPath, targetRelPath, path.join(resolved.local_path, docPath));
+    }
+
+    // new_project_code
+    for (const codePath of resolved.content.new_project_code) {
+      const targetRelPath = path.join(basePath, codePath).replace(/\\/g, '/');
+      addMapping(codePath, targetRelPath, path.join(resolved.local_path, codePath));
     }
   }
 
@@ -400,12 +441,36 @@ function getAllSourceFiles(resolved: ResolvedSource): string[] {
     files.push(...skill.files);
   }
 
+  // skills/README.md
+  if (resolved.content.skills_readme) {
+    files.push('skills/README.md');
+  }
+
   // Rule files
   files.push(...resolved.content.rules);
+
+  // Agents directory files
+  files.push(...resolved.content.agents_dir);
+
+  // Docs files
+  files.push(...resolved.content.other_docs);
+
+  // new_project_code files
+  files.push(...resolved.content.new_project_code);
 
   // AGENTS.md
   if (resolved.content.agents_md) {
     files.push('AGENTS.md');
+  }
+
+  // CLAUDE.md
+  if (resolved.content.claude_md) {
+    files.push('CLAUDE.md');
+  }
+
+  // README.md
+  if (resolved.content.readme) {
+    files.push('README.md');
   }
 
   return files;

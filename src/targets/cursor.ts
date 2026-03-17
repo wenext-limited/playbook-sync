@@ -55,6 +55,25 @@ export class CursorFormatter implements TargetFormatter {
       written.push(path.join(rulesPath, `rule-${ruleName}.mdc`).replace(/\\/g, '/'));
     }
 
+    // Also convert agents/ files (.md only)
+    for (const agentPath of source.content.agents_dir) {
+      if (!agentPath.endsWith('.md')) continue;
+      const srcPath = path.join(source.local_path, agentPath);
+      const agentContent = fs.readFileSync(srcPath, 'utf-8');
+      const agentName = path.basename(agentPath, path.extname(agentPath));
+      const description = extractDescription(agentContent, agentName);
+      const mdcContent = toMdc(description, globs, agentContent);
+
+      const dstPath = resolveTargetPath(
+        projectRoot,
+        path.join(rulesPath, `agent-${agentName}.mdc`)
+      );
+      ensureParentDir(dstPath);
+      fs.writeFileSync(dstPath, mdcContent, 'utf-8');
+
+      written.push(path.join(rulesPath, `agent-${agentName}.mdc`).replace(/\\/g, '/'));
+    }
+
     logger.success(`  ${this.name}: ${written.length} .mdc files → ${rulesPath}`);
     return written;
   }

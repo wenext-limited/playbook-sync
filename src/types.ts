@@ -78,14 +78,22 @@ export interface DiscoveredSkill {
 
 export interface DiscoveredContent {
   skills: DiscoveredSkill[];
-  /** Paths to rule files */
+  /** Paths to rule files (relative, e.g. "rules/common/coding-style.md") */
   rules: string[];
-  /** Path to AGENTS.md if found */
+  /** Absolute path to AGENTS.md if found */
   agents_md?: string;
-  /** Path to README.md if found */
+  /** Paths to files in agents/ directory (relative, e.g. "agents/cocos-developer.md") */
+  agents_dir: string[];
+  /** Absolute path to CLAUDE.md if found */
+  claude_md?: string;
+  /** Absolute path to README.md if found */
   readme?: string;
-  /** All other markdown files */
+  /** Absolute path to skills/README.md if found */
+  skills_readme?: string;
+  /** All other markdown files in docs/ (relative, e.g. "docs/arch.md") */
   other_docs: string[];
+  /** Paths to files in new_project_code/ directory (relative, all file types) */
+  new_project_code: string[];
 }
 
 // ─── Resolved Source ───

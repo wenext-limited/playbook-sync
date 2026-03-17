@@ -43,6 +43,8 @@ export async function statusCommand(): Promise<void> {
       const resolved = await resolveSource(projectRoot, sourceConfig);
       remoteRef = resolved.resolved_ref;
       remoteChecksums = new Map();
+
+      // Skills
       for (const skill of resolved.content.skills) {
         for (const file of skill.files) {
           const absPath = path.join(resolved.local_path, file);
@@ -51,8 +53,57 @@ export async function statusCommand(): Promise<void> {
           }
         }
       }
+
+      // skills/README.md
+      if (resolved.content.skills_readme) {
+        remoteChecksums.set('skills/README.md', checksumFile(resolved.content.skills_readme));
+      }
+
+      // AGENTS.md
       if (resolved.content.agents_md) {
         remoteChecksums.set('AGENTS.md', checksumFile(resolved.content.agents_md));
+      }
+
+      // CLAUDE.md
+      if (resolved.content.claude_md) {
+        remoteChecksums.set('CLAUDE.md', checksumFile(resolved.content.claude_md));
+      }
+
+      // README.md
+      if (resolved.content.readme) {
+        remoteChecksums.set('README.md', checksumFile(resolved.content.readme));
+      }
+
+      // Rules
+      for (const rulePath of resolved.content.rules) {
+        const absPath = path.join(resolved.local_path, rulePath);
+        if (fs.existsSync(absPath)) {
+          remoteChecksums.set(rulePath, checksumFile(absPath));
+        }
+      }
+
+      // Agents directory
+      for (const agentPath of resolved.content.agents_dir) {
+        const absPath = path.join(resolved.local_path, agentPath);
+        if (fs.existsSync(absPath)) {
+          remoteChecksums.set(agentPath, checksumFile(absPath));
+        }
+      }
+
+      // Docs
+      for (const docPath of resolved.content.other_docs) {
+        const absPath = path.join(resolved.local_path, docPath);
+        if (fs.existsSync(absPath)) {
+          remoteChecksums.set(docPath, checksumFile(absPath));
+        }
+      }
+
+      // new_project_code
+      for (const codePath of resolved.content.new_project_code) {
+        const absPath = path.join(resolved.local_path, codePath);
+        if (fs.existsSync(absPath)) {
+          remoteChecksums.set(codePath, checksumFile(absPath));
+        }
       }
     } catch {
       logger.dim('  Could not check source for updates.');
@@ -142,17 +193,41 @@ function mapSourceToTarget(
   targetName: string,
   targetSkillsPath: string
 ): string | null {
-  if (!sourcePath.startsWith('skills/')) {
-    if (sourcePath === 'AGENTS.md') return 'AGENTS.md';
-    return null;
-  }
-
   // Cursor uses .mdc format — skip
   if (targetName === 'cursor') return null;
   // Copilot merges into a single file — skip individual file tracking
   if (targetName === 'copilot') return null;
 
-  // OpenCode / Claude: direct mapping skills/X/Y → target/X/Y
-  const rest = sourcePath.slice('skills/'.length);
-  return path.join(targetSkillsPath, rest).replace(/\\/g, '/');
+  const basePath = path.dirname(targetSkillsPath); // e.g. '.opencode'
+
+  // Skills: skills/X/Y → target_skills_path/X/Y
+  if (sourcePath.startsWith('skills/')) {
+    const rest = sourcePath.slice('skills/'.length);
+    return path.join(targetSkillsPath, rest).replace(/\\/g, '/');
+  }
+
+  // AGENTS.md → project root
+  if (sourcePath === 'AGENTS.md') return 'AGENTS.md';
+
+  // CLAUDE.md → basePath/CLAUDE.md
+  if (sourcePath === 'CLAUDE.md') {
+    return path.join(basePath, 'CLAUDE.md').replace(/\\/g, '/');
+  }
+
+  // README.md → basePath/README.md
+  if (sourcePath === 'README.md') {
+    return path.join(basePath, 'README.md').replace(/\\/g, '/');
+  }
+
+  // rules/, agents/, docs/, new_project_code/ → basePath/<path>
+  if (
+    sourcePath.startsWith('rules/') ||
+    sourcePath.startsWith('agents/') ||
+    sourcePath.startsWith('docs/') ||
+    sourcePath.startsWith('new_project_code/')
+  ) {
+    return path.join(basePath, sourcePath).replace(/\\/g, '/');
+  }
+
+  return null;
 }

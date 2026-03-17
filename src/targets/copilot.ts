@@ -48,6 +48,32 @@ export class CopilotFormatter implements TargetFormatter {
       sections.push(content, '\n---\n');
     }
 
+    // CLAUDE.md content
+    if (source.content.claude_md) {
+      const content = fs.readFileSync(source.content.claude_md, 'utf-8');
+      sections.push(`## CLAUDE.md\n`);
+      sections.push(content);
+      sections.push('\n---\n');
+    }
+
+    // README.md content
+    if (source.content.readme) {
+      const content = fs.readFileSync(source.content.readme, 'utf-8');
+      sections.push(`## README\n`);
+      sections.push(content);
+      sections.push('\n---\n');
+    }
+
+    // Agents directory
+    for (const agentPath of source.content.agents_dir) {
+      const srcPath = path.join(source.local_path, agentPath);
+      const content = fs.readFileSync(srcPath, 'utf-8');
+      const agentName = path.basename(agentPath, path.extname(agentPath));
+      sections.push(`## Agent: ${agentName}\n`);
+      sections.push(content);
+      sections.push('\n---\n');
+    }
+
     // Skills
     for (const skill of source.content.skills) {
       const content = fs.readFileSync(skill.skill_md_path, 'utf-8');
@@ -62,6 +88,16 @@ export class CopilotFormatter implements TargetFormatter {
       const content = fs.readFileSync(srcPath, 'utf-8');
       const ruleName = path.basename(rulePath, path.extname(rulePath));
       sections.push(`## Rule: ${ruleName}\n`);
+      sections.push(content);
+      sections.push('\n---\n');
+    }
+
+    // Docs
+    for (const docPath of source.content.other_docs) {
+      const srcPath = path.join(source.local_path, docPath);
+      const content = fs.readFileSync(srcPath, 'utf-8');
+      const docName = path.basename(docPath, path.extname(docPath));
+      sections.push(`## Doc: ${docName}\n`);
       sections.push(content);
       sections.push('\n---\n');
     }
