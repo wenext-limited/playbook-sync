@@ -66,8 +66,9 @@ export async function statusCommand(): Promise<void> {
     for (const [targetName, targetConfig] of Object.entries(config.targets)) {
       if (!targetConfig.enabled || !targetConfig.skills_path) continue;
 
-      // Skip format-converted targets (Cursor .mdc)
+      // Skip format-converted targets (Cursor .mdc) and merge-mode targets (Copilot)
       if (targetName === 'cursor') continue;
+      if (targetConfig.mode === 'merge') continue;
 
       for (const lockedFile of locked.files) {
         const targetFile = mapSourceToTarget(lockedFile.path, targetName, targetConfig.skills_path);
@@ -148,6 +149,8 @@ function mapSourceToTarget(
 
   // Cursor uses .mdc format — skip
   if (targetName === 'cursor') return null;
+  // Copilot merges into a single file — skip individual file tracking
+  if (targetName === 'copilot') return null;
 
   // OpenCode / Claude: direct mapping skills/X/Y → target/X/Y
   const rest = sourcePath.slice('skills/'.length);

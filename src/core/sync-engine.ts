@@ -216,6 +216,8 @@ function buildFileMappings(
 
         // Cursor uses .mdc format — skip file-level mapping (format is different)
         if (targetName === 'cursor') continue;
+        // Copilot merges all skills into a single file — skip individual file mapping
+        if (targetConfig.mode === 'merge') continue;
 
         const targetRelPath = path.join(skillsPath, skill.name, basename).replace(/\\/g, '/');
         mappings.push({

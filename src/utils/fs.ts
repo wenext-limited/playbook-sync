@@ -84,7 +84,9 @@ export function collectIgnorePaths(
 ): string[] {
   const paths: string[] = [];
 
-  // Always ignore the pbs cache directory
+  // Always ignore pbs config, lockfile, and cache directory
+  paths.push('playbook-sync.yaml');
+  paths.push('playbook-sync.lock.yaml');
   paths.push('.playbook-sync/');
 
   for (const [_name, config] of Object.entries(targets)) {

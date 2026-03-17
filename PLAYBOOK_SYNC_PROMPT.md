@@ -28,6 +28,8 @@
 
 ```gitignore
 # >>> playbook-sync managed (DO NOT EDIT) >>>
+playbook-sync.yaml
+playbook-sync.lock.yaml
 .playbook-sync/
 .claude/skills/
 AGENTS.md
@@ -35,188 +37,14 @@ AGENTS.md
 ```
 
 **行为说明：**
-- 仅当项目根目录已存在 `.gitignore` 时才会写入，不会凭空创建该文件。
+- `.gitignore` 不存在时会自动创建。
 - 标记块内的条目根据 `playbook-sync.yaml` 中**已启用（`enabled: true`）的 targets** 动态生成。
-- `.playbook-sync/`（缓存目录）始终会被忽略。
+- `playbook-sync.yaml`、`playbook-sync.lock.yaml`、`.playbook-sync/`（缓存目录）始终会被忽略。
 - 用户修改 targets 的启用状态后，下次 `pbs sync` 会自动更新标记块。
 - 标记块外的其他 `.gitignore` 内容不会受到影响。
 - **请勿手动编辑标记块内的内容**，它会在每次 sync 时被覆盖。
 
 这确保了 pbs 同步的输出文件不会被意外提交到项目仓库——这些文件应通过 `pbs sync` 从知识库获取，而非通过 git 直接管理。
-
-### 知识库（来源）的目录结构
-
-```
-your-playbook/
-├── skills/
-│   ├── skill-name-a/
-│   │   └── SKILL.md        ← 每个 skill 必须有 SKILL.md
-│   ├── skill-name-b/
-│   │   └── SKILL.md
-│   └── ...
-├── rules/
-│   ├── common/coding-style.md
-│   └── ...
-├── docs/
-│   └── architecture.md
-└── AGENTS.md
-```
-
-SKILL.md 的标准格式：
-
-```markdown
----
-name: skill-name-a
-description: 一句话描述何时使用该 skill
-tags: [标签1, 标签2]
-inputs: [输入参数]
-outputs: [输出结果]
----
-
-# 标题
-
-正文内容...
-```
-
-### 完整命令速查
-
-```bash
-pbs init                                # 在当前目录初始化配置
-pbs add <url或路径> [选项]              # 添加来源
-pbs sync                                # 从来源同步到本地 AI 工具目录
-pbs sync --dry-run                      # 预览同步操作，不实际写入
-pbs sync --force                        # 强制覆盖本地改动（自动备份）
-pbs status                              # 查看同步状态（含三方对比）
-pbs contribute [选项]                   # 将本地改动贡献回来源
-pbs recover                             # 列出所有备份
-pbs recover <backup-id>                 # 从指定备份恢复文件
-pbs watch                               # 监听来源变化，自动同步
-```
-
-### `pbs add` 选项
-
-| 选项 | 说明 |
-|------|------|
-| `--local` / `-l` | 指定为本地路径来源 |
-| `--submodule` / `-s` | 指定为 git submodule 来源 |
-| `--ref <分支/tag>` | 指定 git 分支或 tag，默认 `main` |
-| `--name <名称>` | 自定义来源名称 |
-| `--include <模式...>` | 只同步匹配的 skills（如 `cocos-*`） |
-
-### `pbs sync` 选项
-
-| 选项 | 说明 |
-|------|------|
-| `--dry-run` / `-d` | 预览同步操作，不写入任何文件。显示哪些文件会更新、哪些有本地改动或冲突 |
-| `--force` / `-f` | 强制覆盖本地改动。被覆盖的文件会自动备份到 `.playbook-sync/backups/` |
-
-### `pbs contribute` 选项
-
-| 选项 | 说明 |
-|------|------|
-| `--dry-run` / `-d` | 预览改动，不实际执行 |
-| `--push` / `-p` | 自动建分支 + commit + push |
-| `--branch <名称>` | 指定分支名 |
-| `--message <信息>` | 指定 commit message |
-| `--source <名称>` | 指定贡献到哪个来源（默认第一个） |
-
----
-
-## 场景一：首次搭建环境
-
-用户说：「帮我把 playbook 环境搭起来」「第一次配置」「初始化」
-
-### 判断步骤
-
-**1. 检查 pbs 是否已安装**
-
-```bash
-pbs --version
-```
-
-如果报错「command not found」，先安装：
-
-```bash
-npm install -g playbook-sync
-```
-
-如果没有 npm，先检查 Node.js（需要 >= 18）：
-
-```bash
-node --version
-```
-
-**2. 检查项目目录是否已有配置**
-
-```bash
-ls playbook-sync.yaml
-```
-
-- 存在 → 跳到「检查来源配置」
-- 不存在 → 执行初始化：
-
-```bash
-pbs init
-```
-
-**3. 添加来源**
-
-根据团队情况选择一种：
-
-```bash
-# 方式 A：从 GitHub 仓库（生产推荐）
-pbs add https://github.com/your-org/your-playbook.git
-
-# 方式 B：本地路径（本地开发）
-pbs add --local ../your-playbook
-
-# 方式 C：git submodule（如果项目已有 submodule）
-pbs add --submodule vendor/your-playbook
-```
-
-**4. 确认配置正确**
-
-打开 `playbook-sync.yaml`，确认 sources 和 targets 符合项目需要。
-**所有 targets 默认均为 `enabled: false`，必须手动启用需要的 target**（设置 `enabled: true`），否则 `pbs sync` 不会生成任何输出。
-
-支持的 targets：
-- `opencode` — 同步到 `.opencode/skills/` + `AGENTS.md`
-- `cursor` — 同步到 `.cursor/rules/`（.mdc 格式）
-- `copilot` — 合并到 `.github/copilot-instructions.md`
-- `claude` — 同步到 `.claude/skills/` + `AGENTS.md`
-
-**5. 执行首次同步**
-
-```bash
-pbs sync
-```
-
-首次使用 git URL 来源时会自动 clone，稍等即可。
-同步完成后，pbs 会自动将输出目录追加到项目的 `.gitignore`（如果存在），防止同步产物被意外提交。
-
-**6. 验证输出**
-
-```bash
-pbs status
-```
-
-看到 `✓ All files in sync.` 说明环境搭建完成。
-
-检查 `.gitignore` 确认 pbs 管理的忽略条目已正确写入：
-
-```bash
-cat .gitignore
-```
-
-应该能看到类似以下标记块（内容取决于你启用的 targets）：
-
-```gitignore
-# >>> playbook-sync managed (DO NOT EDIT) >>>
-.playbook-sync/
-.claude/skills/
-AGENTS.md
-# <<< playbook-sync managed <<<
-```
 
 ---
 
@@ -460,30 +288,21 @@ pbs sync
 
 ---
 
-### 问题 2：锁文件 git 合并冲突
+### 问题 2：锁文件损坏或校验和不对
 
-**现象：** `playbook-sync.lock.yaml` 出现 git 冲突标记：
+**现象：** `pbs status` 报告 `modified` 但文件实际没有改动，或 lock 文件内容异常。
 
-```yaml
-<<<<<<< HEAD
-resolved_ref: f8dc7885...
-=======
-resolved_ref: a1b2c3d4...
->>>>>>> feature/xxx
-```
+**原因：** lock 文件内容与实际同步状态不一致（如手动编辑、复制覆盖等）。
 
-**原因：** 多人在不同分支各自执行了 `pbs sync`，合并时产生冲突。
-
-**解决：** 锁文件不需要手动解决冲突，直接删除后重新生成：
+**解决：** 删除 lock 文件后重新 sync：
 
 ```bash
 rm playbook-sync.lock.yaml
 
 pbs sync
-
-git add playbook-sync.lock.yaml
-git commit -m "chore: regenerate lockfile after merge"
 ```
+
+> `playbook-sync.lock.yaml` 不需要提交到 git，已由 `.gitignore` 自动排除。
 
 ---
 
@@ -640,7 +459,7 @@ pbs sync
 │
 └─ 锁文件问题
     ├─ 找不到锁文件            → pbs sync
-    ├─ lockfile git 冲突       → 删除 lock 文件 → pbs sync → git commit
+    ├─ lockfile 损坏/不一致       → 删除 lock 文件 → pbs sync
     ├─ status 误报 modified    → pbs sync（重新生成校验和）
     ├─ 来源有新 commit         → pbs sync
     ├─ .git/index.lock 存在   → 删除 index.lock → pbs sync
@@ -654,10 +473,9 @@ pbs sync
 1. **`pbs sync` 默认会检测本地改动并阻止覆盖**。如果本地有修改，sync 会中止并提示选项。使用 `--force` 可强制覆盖（自动备份），或先 `pbs contribute` 保存改动。
 2. **`pbs sync --force` 自动备份被覆盖的文件**到 `.playbook-sync/backups/`，可用 `pbs recover` 恢复。
 3. **Cursor 的 `.mdc` 文件不支持贡献回流**。编辑 skill 内容请通过 `.claude/skills/` 或 `.opencode/skills/` 目录。
-4. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
-5. **`.playbook-sync/` 目录不需要提交**（已在 `.gitignore`），包含 git 来源缓存、快照和备份。
-6. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
-7. **`pbs sync` 会自动维护 `.gitignore`**。已启用 targets 的输出路径会被自动添加到 `.gitignore` 的标记块中，确保同步产物不被误提交。修改 targets 启用状态后，下次 sync 会自动更新。
-8. **所有 targets 默认为 `enabled: false`**。初始化后需手动在 `playbook-sync.yaml` 中启用所需 targets。
-9. **`pbs status` 使用三方对比**（快照 vs 本地 vs 来源），能区分 `modified_local`、`modified_source` 和 `conflict`。
+4. **`playbook-sync.yaml`、`playbook-sync.lock.yaml` 和 `.playbook-sync/` 均不需要提交**（已在 `.gitignore` 自动排除）。每台机器各自运行 `pbs init` + `pbs add` 初始化，按需 `pbs sync`。
+5. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
+6. **`pbs sync` 会自动维护 `.gitignore`**。已启用 targets 的输出路径会被自动添加到 `.gitignore` 的标记块中，确保同步产物不被误提交。修改 targets 启用状态后，下次 sync 会自动更新。
+7. **`opencode` target 默认已启用**。其他 targets（cursor、copilot、claude）默认禁用，需手动在 `playbook-sync.yaml` 中设置 `enabled: true`。
+8. **`pbs status` 使用三方对比**（快照 vs 本地 vs 来源），能区分 `modified_local`、`modified_source` 和 `conflict`。
 10. **`pbs contribute` 会检查来源是否有新提交**。如果来源在上次 sync 后有更新，会给出警告（但仍允许继续）。
