@@ -1,8 +1,125 @@
-# playbook-sync 操作助手提示词
+# playbook-sync 操作助手提示词 (v0.2.0)
 
 将本文档完整提供给 AI，AI 即可帮你完成所有 playbook-sync 相关操作。
 
 > **提示：** `README.zh.md` 已包含本文档的完整内容，可以直接将 README.zh.md 提供给 AI 使用。
+
+---
+
+## 版本与更新说明
+
+**当前版本：v0.2.0**
+
+### 版本更新日志
+
+| 版本 | 发布时间 | 主要更新 |
+|------|--------|--------|
+| v0.2.0 | 2026-03 | ✨ **git sources 默认自动推送**；`pbs contribute` 前自动 fetch+rebase，冲突时清晰报错 & 人工介入指引；同步覆盖完整 playbook 结构（rules/agents/docs/new_project_code/CLAUDE.md/README.md/skills/README.md） |
+| v0.1.0 | 2026-01 | 初始版本：基础 sync/contribute；仅同步 skills/AGENTS.md |
+
+### 自动安装与更新
+
+在使用前，运行以下命令确保你已安装最新版本：
+
+```bash
+# 检查是否已安装，否则从源代码安装
+if ! command -v pbs &> /dev/null; then
+  echo "未检测到 pbs，正在安装..."
+  git clone https://github.com/wenext-limited/playbook-sync.git /tmp/playbook-sync
+  cd /tmp/playbook-sync
+  npm install
+  npm run build
+  ln -s "$(pwd)/bin/pbs.js" /usr/local/bin/pbs 2>/dev/null || echo "请手动添加 bin/pbs.js 到 PATH"
+fi
+
+# 更新到最新版本
+cd /tmp/playbook-sync
+git pull origin main
+npm install
+npm run build
+echo "✓ playbook-sync 已更新到最新版本"
+
+# 验证版本
+pbs --version
+```
+
+如已安装，直接运行上述"更新到最新版本"部分即可。
+
+---
+
+## 重要更新亮点（v0.2.0）
+
+### 1️⃣ **`pbs contribute` 现在默认自动推送**
+
+**之前（v0.1.0）：** 需要显式 `--push` 才会推送
+```bash
+pbs contribute --push  # 必须加 --push
+```
+
+**现在（v0.2.0）：** git sources 自动推送，无需额外参数
+```bash
+pbs contribute  # git sources 默认推送到 origin
+pbs contribute --no-push  # 如不想推送，显式禁用
+```
+
+### 2️⃣ **Rebase 与冲突处理更智能**
+
+**流程改进：**
+1. 自动 `fetch` 最新远端
+2. 自动 `rebase` 到 origin branch
+3. 遇到冲突 → 自动 abort rebase，给出清晰的人工解决指引（不是沉默失败）
+4. `git push` 成功
+
+**冲突时的用户指引：**
+```
+Could not automatically rebase your changes onto the latest remote.
+The remote branch has diverged from your local changes.
+
+To resolve manually:
+  cd /path/to/source/repo
+  git fetch origin
+  git rebase origin/main
+  # Fix conflicts, then: git rebase --continue
+  git push origin main
+```
+
+### 3️⃣ **同步完整 Playbook 结构**
+
+**原来只同步：**
+- `skills/*/SKILL.md`
+- `AGENTS.md`（根目录）
+
+**现在还同步：**
+- ✅ `rules/**/*.md`
+- ✅ `agents/**/*.md`
+- ✅ `docs/**/*`
+- ✅ `new_project_code/**/*`
+- ✅ `CLAUDE.md`
+- ✅ `README.md`
+- ✅ `skills/README.md`
+
+**受影响的输出目录：**
+- `.opencode/` 现在包含：rules/agents/docs/new_project_code/CLAUDE.md/README.md 等
+- `.claude/` 同理
+- `.cursor/` 自动把 rules & agents 转为 `.mdc` 格式
+- Copilot 的合并文件包含新增内容类型
+
+### 4️⃣ **.gitignore 更新策略**
+
+**原来：** 只忽略 `skills_path` 目录
+```gitignore
+.opencode/skills/
+.cursor/rules/
+```
+
+**现在：** 忽略整个 playbook 输出目录
+```gitignore
+.opencode/
+.claude/
+.cursor/
+```
+
+这样规则、文档等也不会被意外提交。
 
 ---
 
