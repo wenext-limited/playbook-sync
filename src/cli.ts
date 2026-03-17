@@ -1,10 +1,11 @@
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { addCommand, type AddOptions } from './commands/add.js';
-import { syncCommand } from './commands/sync.js';
+import { syncCommand, type SyncOptions } from './commands/sync.js';
 import { statusCommand } from './commands/status.js';
 import { contributeCommand, type ContributeOptions } from './commands/contribute.js';
 import { watchCommand } from './commands/watch.js';
+import { recoverCommand } from './commands/recover.js';
 import { logger } from './utils/logger.js';
 
 const program = new Command();
@@ -51,9 +52,11 @@ program
 program
   .command('sync')
   .description('Sync all playbook sources to AI tool directories')
-  .action(async () => {
+  .option('-d, --dry-run', 'Preview what would happen without writing')
+  .option('-f, --force', 'Force overwrite local changes (auto-backup first)')
+  .action(async (options: SyncOptions) => {
     try {
-      await syncCommand();
+      await syncCommand(options);
     } catch (err) {
       logger.error(String(err));
       process.exit(1);
@@ -85,6 +88,19 @@ program
   .action(async (options: ContributeOptions) => {
     try {
       await contributeCommand(options);
+    } catch (err) {
+      logger.error(String(err));
+      process.exit(1);
+    }
+  });
+
+// ─── recover ───
+program
+  .command('recover [backup-id]')
+  .description('List backups or recover files from a specific backup')
+  .action(async (backupId?: string) => {
+    try {
+      await recoverCommand(backupId);
     } catch (err) {
       logger.error(String(err));
       process.exit(1);

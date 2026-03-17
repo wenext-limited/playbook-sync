@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loadConfig } from '../core/config.js';
 import { loadLockfile } from '../core/lockfile.js';
+import { resolveSource } from '../core/source.js';
 import { findProjectRoot, checksumFile } from '../utils/fs.js';
 import { commitAndPush } from '../utils/git.js';
 import { logger } from '../utils/logger.js';
@@ -125,6 +126,27 @@ export async function contributeCommand(options: ContributeOptions): Promise<voi
   if (options.dryRun) {
     logger.info('Dry run — no changes applied.');
     return;
+  }
+
+  // Pre-check: warn if source has newer commits than what we synced from
+  try {
+    const resolved = await resolveSource(projectRoot, sourceConfig);
+    if (resolved.resolved_ref !== locked.resolved_ref) {
+      logger.warn(
+        `Source has been updated since last sync: ${locked.resolved_ref.slice(0, 8)} → ${resolved.resolved_ref.slice(0, 8)}`
+      );
+      logger.warn(
+        'Your changes may conflict with newer source content.'
+      );
+      logger.info(
+        'Consider running "pbs sync --force" first, then re-apply your changes.'
+      );
+      logger.info(
+        'Proceeding with contribute anyway...\n'
+      );
+    }
+  } catch {
+    // Could not check — proceed anyway
   }
 
   // Copy changes back to source

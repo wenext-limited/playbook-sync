@@ -94,7 +94,17 @@ pbs contribute --push --branch "fix/xxx" --message "fix: 修正示例代码"
 
 每次 `pbs sync` 自动更新 `playbook-sync.lock.yaml`，记录每个文件的 SHA-256 校验和与 git commit hash。将 lockfile 提交到项目仓库，团队所有成员运行 `pbs sync` 后得到完全一致的内容。
 
-### 5. Watch 模式，改知识库立即看效果
+### 5. 本地改动安全保护
+
+`pbs sync` 在写入前自动检测本地改动，默认**阻止覆盖**，提示三种处理方式。`--force` 强制同步时自动备份，可随时用 `pbs recover` 还原：
+
+```bash
+pbs sync --dry-run    # 预览，不写入
+pbs sync --force      # 覆盖但自动备份
+pbs recover           # 查看/恢复备份
+```
+
+### 6. Watch 模式，改知识库立即看效果
 
 ```bash
 pbs watch   # 修改知识库文件后项目目录立即自动更新
@@ -177,13 +187,17 @@ pbs add https://github.com/your-org/your-playbook.git
 # 也可以用本地路径
 pbs add --local ../your-playbook
 
-# 3. 同步到所有已启用的 AI 工具目录
+# 3. 启用需要的 targets（所有 targets 默认为 disabled）
+# 编辑 playbook-sync.yaml，将需要的 target 设为 enabled: true
+# 支持：opencode / cursor / copilot / claude
+
+# 4. 同步到所有已启用的 AI 工具目录
 pbs sync
 
-# 4. 查看同步状态
+# 5. 查看同步状态
 pbs status
 
-# 5. 开发知识库时，启动 watch 模式自动同步
+# 6. 开发知识库时，启动 watch 模式自动同步
 pbs watch
 ```
 
@@ -195,12 +209,12 @@ pbs watch
 ℹ Syncing source: your-playbook
 → Cloning https://github.com/your-org/your-playbook.git...
 ✓ Resolved git source "your-playbook" at a1b2c3d4
-✓   OpenCode: 12 files → .opencode/skills
-✓   Cursor: 12 .mdc files → .cursor/rules
+✓   Claude Code: 12 files → .claude/skills
 ✓ Lockfile updated.
+✓ Updated .gitignore with playbook-sync output paths.
 
 ℹ Sync complete:
-  your-playbook @a1b2c3d4 → 24 files → [opencode, cursor]
+  your-playbook @a1b2c3d4 → 12 files → [claude]
 ```
 
 ---
@@ -249,27 +263,57 @@ pbs add --local ../my-playbook --name my-rules
 将所有来源的内容同步到已启用的 AI 工具目录，并更新 lockfile。
 
 ```bash
-pbs sync
+pbs sync              # 标准同步（本地有改动时会阻止）
+pbs sync --dry-run    # 预览将要发生的操作，不写入任何文件
+pbs sync --force      # 强制覆盖本地改动（自动备份被覆盖的文件）
 ```
 
-> ⚠️ sync 会覆盖输出目录中的文件。如果本地有改动要保留，先执行 `pbs contribute`。
+| 选项 | 说明 |
+|------|------|
+| `-d, --dry-run` | 预览同步操作，不写入任何文件。显示哪些文件会更新、哪些有本地改动或冲突 |
+| `-f, --force` | 强制覆盖本地改动。被覆盖的文件会自动备份到 `.playbook-sync/backups/`，可用 `pbs recover` 恢复 |
+
+**冲突保护机制：**
+
+`pbs sync` 在写入前会进行**三方对比**（快照基线 vs 本地文件 vs 来源文件）。如果检测到本地改动或冲突，默认会**阻止同步**并给出操作选项：
+
+```
+⚠ Sync blocked — local modifications detected:
+
+→ 1 file(s) modified locally:
+    .claude/skills/your-skill/SKILL.md
+
+ℹ Options:
+  pbs contribute             # Push local changes to source first
+  pbs sync --force           # Force overwrite (auto-backup local changes)
+  pbs sync --dry-run         # Preview what would happen
+  pbs recover <backup-id>    # Restore from a backup after force sync
+```
 
 **自动发现并同步的内容：**`skills/*/SKILL.md`、`rules/**/*.md`、`docs/**/*.md`、`AGENTS.md`、`README.md`
+
+**`.gitignore` 自动维护：**`pbs sync` 执行时会自动将输出目录追加到项目的 `.gitignore`（如果文件存在），防止同步产物被意外提交。条目由标记块管理，随 targets 启用状态动态更新，请勿手动编辑标记块内容。
 
 ---
 
 ### `pbs status`
 
-查看当前同步状态。
+查看当前同步状态。使用**三方对比**（快照基线 vs 本地文件 vs 来源文件）精确区分改动来源。
 
 ```bash
 pbs status
 ```
 
-报告内容：
-- 各文件是否与 lockfile 一致
-- 本地被修改的文件列表
-- 来源是否有新提交（上游更新提示）
+报告内容及状态含义：
+
+| 状态 | 含义 |
+|------|------|
+| `modified_local` | 本地文件已修改，来源未变 → 可用 `pbs contribute` 贡献回去 |
+| `modified_source` | 来源已更新，本地未改 → 运行 `pbs sync` 更新 |
+| `conflict` | 本地和来源都修改了同一文件 → 先 `pbs contribute`，再 `pbs sync`，或 `pbs sync --force` |
+| `deleted` | 本地文件被删除 |
+
+此外还会提示来源是否有新提交（上游更新）。
 
 ---
 
@@ -304,7 +348,31 @@ pbs contribute --push \
   --message "fix: 修正示例代码"
 ```
 
-> **注意：** Cursor 的 `.mdc` 文件不支持贡献回流（格式已转换）。请通过 `.opencode/skills/` 目录下的 SKILL.md 进行编辑。
+> **注意：** Cursor 的 `.mdc` 文件不支持贡献回流（格式已转换）。请通过 `.claude/skills/` 或 `.opencode/skills/` 目录下的 SKILL.md 进行编辑。
+
+---
+
+### `pbs recover`
+
+列出备份或从指定备份恢复文件。`pbs sync --force` 在覆盖本地文件前会自动创建备份。
+
+```bash
+pbs recover                   # 列出所有备份
+pbs recover <backup-id>       # 从指定备份恢复文件
+```
+
+**示例：**
+
+```
+ℹ Found 1 backup(s):
+
+  20260317-103139  2026/3/17 10:31:39  (1 files)
+    .claude/skills/cocos-audio/SKILL.md
+
+ℹ To restore: pbs recover <backup-id>
+```
+
+备份存储在 `.playbook-sync/backups/<时间戳>/`，最多保留 10 个，超出后自动删除最旧的。
 
 ---
 
@@ -346,12 +414,12 @@ sources:
 
 targets:
   opencode:
-    enabled: true
+    enabled: false              # 默认禁用，按需设为 true
     skills_path: .opencode/skills    # skills 输出目录
     agents_md: AGENTS.md             # AGENTS.md 输出路径
 
   cursor:
-    enabled: true
+    enabled: false
     skills_path: .cursor/rules       # .mdc 文件输出目录
     mdc_globs:                       # Cursor rule 的 globs 字段
       - "**/*.ts"
@@ -391,7 +459,7 @@ sources:
 ```
 
 **建议将 lockfile 提交到项目 git 仓库**，保证团队所有成员的同步结果完全一致。  
-`.playbook-sync/` 目录（git 缓存）**不需要提交**，已在 `.gitignore` 中排除。
+`.playbook-sync/` 目录（git 缓存、快照、备份）**不需要提交**，已在 `.gitignore` 中自动排除。
 
 ---
 
@@ -404,24 +472,34 @@ sources:
    编写/更新 skills                  ↓ 同步到项目 AI 工具目录
         │
         │   发现 skill 有问题       3. 在项目内直接修改
-        │   或有改进机会               .opencode/skills/xxx/SKILL.md
+        │   或有改进机会               .claude/skills/xxx/SKILL.md
         │                                      │
         │                            4. pbs contribute --push
+        │                               （来源有新提交时会给出警告）
         │                               自动建分支 + push
         │                                      │
         └──────────────────── 5. 发起 PR，维护者 Review 合并 ──►
+```
+
+**误覆盖了本地改动？**
+
+```bash
+pbs recover                   # 查看自动备份列表
+pbs recover <backup-id>       # 恢复指定备份
 ```
 
 ---
 
 ## 注意事项
 
-1. **`pbs sync` 会覆盖输出目录**（`.opencode/skills/`、`.cursor/rules/` 等）。有本地改动先 `contribute`，再 `sync`。
-2. **Cursor `.mdc` 文件不支持贡献回流**。要修改 skill 内容，请编辑 `.opencode/skills/<name>/SKILL.md`。
-3. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
-4. **`.playbook-sync/` 目录不需要提交**（已在 `.gitignore`），是 git 来源的本地缓存。
-5. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
-6. **来源仓库必须有 `skills/*/SKILL.md` 结构**，否则 pbs 无法发现任何 skill。
+1. **`pbs sync` 默认检测本地改动并阻止覆盖。** 有本地修改时 sync 会中止并提示选项。使用 `--force` 可强制覆盖（自动备份），或先 `pbs contribute` 保存改动。
+2. **`pbs sync --force` 自动备份被覆盖的文件**到 `.playbook-sync/backups/`，可用 `pbs recover` 恢复。
+3. **所有 targets 默认为 `enabled: false`。** 初始化后需手动在 `playbook-sync.yaml` 中启用需要的 targets。
+4. **Cursor `.mdc` 文件不支持贡献回流**（格式已转换）。要修改 skill 内容，请编辑 `.claude/skills/` 或 `.opencode/skills/` 下对应的 SKILL.md。
+5. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
+6. **`.playbook-sync/` 目录不需要提交**（已自动添加到 `.gitignore`），包含 git 缓存、快照和备份。
+7. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
+8. **来源仓库必须有 `skills/*/SKILL.md` 结构**，否则 pbs 无法发现任何 skill。
 
 ---
 

@@ -84,8 +84,12 @@ outputs: [输出结果]
 pbs init                                # 在当前目录初始化配置
 pbs add <url或路径> [选项]              # 添加来源
 pbs sync                                # 从来源同步到本地 AI 工具目录
-pbs status                              # 查看同步状态
+pbs sync --dry-run                      # 预览同步操作，不实际写入
+pbs sync --force                        # 强制覆盖本地改动（自动备份）
+pbs status                              # 查看同步状态（含三方对比）
 pbs contribute [选项]                   # 将本地改动贡献回来源
+pbs recover                             # 列出所有备份
+pbs recover <backup-id>                 # 从指定备份恢复文件
 pbs watch                               # 监听来源变化，自动同步
 ```
 
@@ -98,6 +102,13 @@ pbs watch                               # 监听来源变化，自动同步
 | `--ref <分支/tag>` | 指定 git 分支或 tag，默认 `main` |
 | `--name <名称>` | 自定义来源名称 |
 | `--include <模式...>` | 只同步匹配的 skills（如 `cocos-*`） |
+
+### `pbs sync` 选项
+
+| 选项 | 说明 |
+|------|------|
+| `--dry-run` / `-d` | 预览同步操作，不写入任何文件。显示哪些文件会更新、哪些有本地改动或冲突 |
+| `--force` / `-f` | 强制覆盖本地改动。被覆盖的文件会自动备份到 `.playbook-sync/backups/` |
 
 ### `pbs contribute` 选项
 
@@ -270,6 +281,15 @@ pbs sync
 pbs status
 ```
 
+`pbs status` 使用**三方对比**（快照基线 vs 本地文件 vs 来源文件），显示以下状态：
+
+| 状态 | 含义 |
+|------|------|
+| `modified_local` | 本地文件已修改，来源未变 |
+| `modified_source` | 来源已更新，本地未改 |
+| `conflict` | 本地和来源都修改了同一文件 |
+| `deleted` | 本地文件被删除 |
+
 **情况 A：状态显示 `All files in sync`，来源有新 commit**
 
 ```
@@ -283,21 +303,38 @@ pbs status
 pbs sync
 ```
 
-**情况 B：状态显示本地有改动（modified）**
+**情况 B：状态显示本地有改动（`modified_local`）**
 
 ```
-  modified  .opencode/skills/your-skill/SKILL.md
-  Local changes detected. Use "pbs contribute" to push them back.
+    modified_local   .claude/skills/your-skill/SKILL.md
+ℹ   1 file(s) modified locally. Use "pbs contribute" to push back.
 ```
 
-此时需要先决定：
+此时 `pbs sync` 会**被阻止**，并给出操作选项。需要先决定：
 
-- 想**保留**本地改动并贡献回去 → 先执行 contribute（见场景四），再 sync
-- 想**丢弃**本地改动，强制用来源覆盖 → 直接 `pbs sync`（sync 会覆盖本地文件）
+- 想**保留**本地改动并贡献回去 → 先 `pbs contribute`，再 `pbs sync`
+- 想**丢弃**本地改动 → `pbs sync --force`（自动备份被覆盖的文件）
 
-> ⚠️ `pbs sync` 会直接覆盖输出目录中的文件。如果本地有重要改动，务必先 `pbs contribute` 保存。
+```bash
+# 预览同步操作（不写入）
+pbs sync --dry-run
 
-**情况 C：没有锁文件（首次或锁文件被删）**
+# 强制同步，自动备份被覆盖的文件
+pbs sync --force
+```
+
+**情况 C：状态显示冲突（`conflict`）**
+
+```
+    conflict         .claude/skills/your-skill/SKILL.md
+ℹ   1 file(s) conflicting (both local and source changed).
+ℹ   Options: "pbs contribute" first, then "pbs sync", or "pbs sync --force".
+```
+
+- 想保留本地改动 → 先 `pbs contribute --push`，再 `pbs sync`
+- 想用来源覆盖 → `pbs sync --force`（自动备份，可用 `pbs recover` 恢复）
+
+**情况 D：没有锁文件（首次或锁文件被删）**
 
 ```
 ℹ No lockfile found. Run "pbs sync" first.
@@ -308,6 +345,27 @@ pbs sync
 ```bash
 pbs sync
 ```
+
+### 备份与恢复
+
+`pbs sync --force` 会在覆盖本地文件前自动创建备份，保存在 `.playbook-sync/backups/<时间戳>/`。
+
+```bash
+# 列出所有备份
+pbs recover
+
+# 输出示例：
+# ℹ Found 2 backup(s):
+#   20260317-103139  2026/3/17 10:31:39  (1 files)
+#     .claude/skills/cocos-audio/SKILL.md
+#   20260317-095500  2026/3/17 09:55:00  (3 files)
+#     ...
+
+# 从指定备份恢复
+pbs recover 20260317-103139
+```
+
+备份最多保留 10 个，超过后自动删除最旧的备份。
 
 ---
 
@@ -561,18 +619,24 @@ pbs sync
 用户的问题
 │
 ├─ 环境没搭好 / 第一次用
-│   └─ pbs init → pbs add <来源> → pbs sync
+│   └─ pbs init → pbs add <来源> → 启用 targets → pbs sync
 │
 ├─ 要同步最新知识库内容下来
-│   ├─ 本地有改动？ → 先 pbs contribute，再 pbs sync
-│   └─ 没有改动？  → 直接 pbs sync
+│   ├─ pbs status 显示 modified_local / conflict？
+│   │   ├─ 想保留本地改动 → 先 pbs contribute → 再 pbs sync
+│   │   └─ 想丢弃本地改动 → pbs sync --force（自动备份）
+│   └─ 无本地改动？ → 直接 pbs sync
 │
 ├─ 要把本地修改贡献回知识库
-│   ├─ 改的是 .opencode/skills/ 下的文件？
+│   ├─ 改的是 .claude/skills/ 或 .opencode/skills/ 下的文件？
 │   │   ├─ 只复制回去  → pbs contribute
 │   │   └─ 推送到远程  → pbs contribute --push --branch xxx --message xxx
 │   └─ 改的是 .cursor/rules/ 的 .mdc 文件？
-│       └─ 不支持直接贡献，改为编辑 .opencode/skills/ 对应的 SKILL.md
+│       └─ 不支持直接贡献，改为编辑对应 target 目录下的 SKILL.md
+│
+├─ 误操作 / 想恢复被覆盖的文件
+│   ├─ pbs recover       # 列出备份
+│   └─ pbs recover <id>  # 恢复指定备份
 │
 └─ 锁文件问题
     ├─ 找不到锁文件            → pbs sync
@@ -587,9 +651,13 @@ pbs sync
 
 ## 注意事项
 
-1. **`pbs sync` 会覆盖输出目录**（`.opencode/skills/`、`.cursor/rules/` 等）。有本地改动先 `contribute`，再 `sync`。
-2. **Cursor 的 `.mdc` 文件不支持贡献回流**。编辑 skill 内容请通过 `.opencode/skills/` 目录。
-3. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
-4. **`.playbook-sync/` 目录不需要提交**（已在 `.gitignore`），是 git 来源的本地缓存。
-5. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
-6. **`pbs sync` 会自动维护 `.gitignore`**。已启用 targets 的输出路径会被自动添加到 `.gitignore` 的标记块中，确保同步产物不被误提交。修改 targets 启用状态后，下次 sync 会自动更新。
+1. **`pbs sync` 默认会检测本地改动并阻止覆盖**。如果本地有修改，sync 会中止并提示选项。使用 `--force` 可强制覆盖（自动备份），或先 `pbs contribute` 保存改动。
+2. **`pbs sync --force` 自动备份被覆盖的文件**到 `.playbook-sync/backups/`，可用 `pbs recover` 恢复。
+3. **Cursor 的 `.mdc` 文件不支持贡献回流**。编辑 skill 内容请通过 `.claude/skills/` 或 `.opencode/skills/` 目录。
+4. **锁文件建议提交到 git**（`playbook-sync.lock.yaml`），保证团队同步版本一致。
+5. **`.playbook-sync/` 目录不需要提交**（已在 `.gitignore`），包含 git 来源缓存、快照和备份。
+6. **`pbs watch` 支持所有来源类型**，但 `git` URL 来源监听的是本地缓存目录，要拉取远程更新仍需手动 `pbs sync`。
+7. **`pbs sync` 会自动维护 `.gitignore`**。已启用 targets 的输出路径会被自动添加到 `.gitignore` 的标记块中，确保同步产物不被误提交。修改 targets 启用状态后，下次 sync 会自动更新。
+8. **所有 targets 默认为 `enabled: false`**。初始化后需手动在 `playbook-sync.yaml` 中启用所需 targets。
+9. **`pbs status` 使用三方对比**（快照 vs 本地 vs 来源），能区分 `modified_local`、`modified_source` 和 `conflict`。
+10. **`pbs contribute` 会检查来源是否有新提交**。如果来源在上次 sync 后有更新，会给出警告（但仍允许继续）。
